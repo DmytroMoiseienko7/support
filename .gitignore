@@ -1,0 +1,9 @@
+#Vscode
+.vscode
+
+
+# Python staff
+__pycache__/
+
+#Sqlite
+*sqlite3
