@@ -26,62 +26,63 @@ class ExchangeRate:
             "value": self.value,
         }
 
-    def __eq__(self, other: "ExchangeRate") -> bool:
-        return self.value == other.value
-
 
 class JsonMemoryFile:
-    HISTORY_JSON_FILE = "config/memory_files/history.json"
+    def __init__(self) -> None:
+        self.HISTORY_JSON_FILE = "config/memory_files/history.json"
 
-    @classmethod
-    def read_json_file(cls):
-        with open(cls.HISTORY_JSON_FILE, "r") as file:
+    def read_json_file(self):
+        with open(self.HISTORY_JSON_FILE, "r") as file:
             data = json.load(file)
         return data
 
-    @classmethod
-    def write_to_json(cls, data):
-        with open(cls.HISTORY_JSON_FILE, "w") as file:
+    def write_to_json(self, data):
+        with open(self.HISTORY_JSON_FILE, "w") as file:
             json.dump(data, file)
 
 
-class ExchangeRateHistory:
+class ExchangeRateHistory(JsonMemoryFile):
+    def __init__(self, instance) -> None:
+        self.instance = instance
+        super().__init__()
+        self.memory_file = super().read_json_file()["results"]
 
-    _history = []
+    def add(self, instance) -> None:
+        if not self.memory_file:
+            self.memory_file.append(instance)
+        elif self.memory_file[-1] != instance:
+            self.memory_file.append(instance)
 
-    @classmethod
-    def add(cls, instance) -> None:
-        if not cls._history:
-            cls._history.append(instance)
-        elif cls._history[-1] != instance:
-            cls._history.append(instance)
-
-    @classmethod
-    def as_dict(cls) -> list:
-        return {"results": [er.as_dict() for er in cls._history]}
+    def as_dict(self) -> dict:
+        return {"results": [er for er in self.memory_file]}
 
 
 def btc_usd(request):
     # NOTE Connect to exchange rates API
     API_key = "KP5A01WINLXSTYUY"
-    firtst_url_part = "https://www.alphavantage.co/query?function="
-    url = f"{firtst_url_part}CURRENCY_EXCHANGE_RATE&from_currency=BTC&to_currency=USD&apikey={API_key}"
+    url = (
+        "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&"
+        f"from_currency=BTC&to_currency=USD&apikey={API_key}"
+    )
     response = requests.get(url)
 
     # NOTE Parse the source response
     exchange_rate = ExchangeRate.from_response(response.json())
 
     # NOTE Add result to the exchange rate history
+    exchange_rate_history = ExchangeRateHistory(exchange_rate)
+    exchange_rate_history.add(exchange_rate.as_dict())
 
-    ExchangeRateHistory.add(exchange_rate)
-
-    JsonMemoryFile.write_to_json(ExchangeRateHistory.as_dict())
+    # NOTE Write down exchange rate history to the json file
+    json_memory_file = JsonMemoryFile()
+    json_memory_file.write_to_json(exchange_rate_history.as_dict())
 
     return JsonResponse(exchange_rate.as_dict())
 
 
 def history(request):
-    return JsonResponse(JsonMemoryFile.read_json_file())
+    json_memory_file = JsonMemoryFile()
+    return JsonResponse(json_memory_file.read_json_file())
 
 
 def home(request):
